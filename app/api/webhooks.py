@@ -96,9 +96,7 @@ async def process_pr_review(
     from app.github.diff_parser import parse_github_pr_files
     from app.github.publisher import publish_review
     from app.models import FindingRecord, ReviewRun
-    from app.review.engine import ReviewEngine
-    from app.review.static_rules import check_missing_tests, run_static_checks
-    from app.review.validator import FindingValidator
+    from app.review.pipeline import full_pipeline
 
     db = get_database()
     owner, repo = split_repo_full_name(pr_info["repository_full_name"])
@@ -137,32 +135,8 @@ async def process_pr_review(
             len(skipped_files),
         )
 
-        static_findings = run_static_checks(parsed_files)
-        missing_test_finding = check_missing_tests(parsed_files)
-        if missing_test_finding:
-            static_findings.append(missing_test_finding)
-
-        diff_text = "\n".join(
-            f"--- {pf.filename}\n{pf.patch}" for pf in parsed_files
-        )
-
-        async with ReviewEngine(settings) as engine:
-            review_result = await engine.review(
-                repository=pr_info["repository_full_name"],
-                pr_title=pr_info["pr_title"],
-                pr_number=pr_number,
-                author=pr_info["author"],
-                base_branch=pr_info["base_branch"],
-                head_branch=pr_info["head_branch"],
-                diff_text=diff_text,
-                static_findings=static_findings,
-            )
-
-        validator = FindingValidator(settings)
-        validated = validator.validate_and_rank(
-            review_result.findings,
-            parsed_files,
-            static_finding_count=len(static_findings),
+        validated, review_result, critic_json = await full_pipeline(
+            settings, pr_info, parsed_files,
         )
 
         github_client = await auth.get_client_for_installation(pr_info["installation_id"])
@@ -185,6 +159,7 @@ async def process_pr_review(
                 run.summary = review_result.summary
                 run.risk_level = review_result.risk_level.value
                 run.suggested_tests = "\n".join(review_result.suggested_tests)
+                run.critic_decisions = critic_json
                 for finding in validated:
                     record = FindingRecord(
                         review_run_id=run.id,

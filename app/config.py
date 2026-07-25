@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     github_max_retries: int = Field(3, ge=0, le=10, description="Maximum retries for transient GitHub failures.")
     github_retry_backoff: float = Field(1.0, ge=0.0, le=10.0, description="Backoff multiplier between retries.")
 
+    critic_enabled: bool = Field(True, description="Enable the critic stage in the review pipeline.")
+    critic_timeout: int = Field(60, ge=5, le=300, description="Timeout in seconds for critic LLM requests.")
     port: int = Field(8000, ge=1, le=65535, description="Port for the Uvicorn server.")
     log_level: str = Field("info", description="Uvicorn/Python log level.")
 
