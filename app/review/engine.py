@@ -46,19 +46,47 @@ def _make_strict_schema(schema: dict) -> dict:
                     prop.update(resolved)
 
                 if "anyOf" in prop:
-                    types = []
+                    # Resolve any $ref inside anyOf items before extracting types.
+                    resolved_anyOf = []
                     for opt in prop["anyOf"]:
+                        if "$ref" in opt:
+                            opt = _resolve_ref(opt["$ref"])
+                        resolved_anyOf.append(opt)
+
+                    types: list[str] = []
+                    has_null = False
+                    for opt in resolved_anyOf:
                         t = opt.get("type")
-                        if t and t != "null":
+                        if t == "null":
+                            has_null = True
+                        elif t:
                             types.append(t)
+                        # Enums have "enum" but no explicit type; infer type from first
+                        # value if one exists.
+                        if not t and "enum" in opt:
+                            first = opt["enum"][0]
+                            if isinstance(first, str):
+                                t = "string"
+                            elif isinstance(first, bool):
+                                t = "boolean"
+                            elif isinstance(first, int):
+                                t = "integer"
+                            elif isinstance(first, float):
+                                t = "number"
+                            if t and t != "null":
+                                types.append(t)
+
                     if types:
                         prop["type"] = types if len(types) > 1 else types[0]
-                    if any(opt.get("type") == "null" for opt in prop["anyOf"]):
+                    if has_null:
                         prop_type = prop.get("type")
                         if isinstance(prop_type, list):
-                            prop_type.append("null")
+                            if "null" not in prop_type:
+                                prop_type.append("null")
                         elif prop_type:
                             prop["type"] = [prop_type, "null"]
+                        else:
+                            prop["type"] = ["null"]
                     prop.pop("anyOf", None)
                     prop.pop("default", None)
 
