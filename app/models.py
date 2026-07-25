@@ -40,10 +40,17 @@ class Finding(BaseModel):
     severity: Severity
     confidence: float = Field(..., ge=0.0, le=1.0)
     file_path: str = Field(..., min_length=1)
-    line: Optional[int] = Field(None, ge=1)
+    line: Optional[int] = Field(None, ge=0)
     explanation: str = Field(..., min_length=10, max_length=2000)
     failure_scenario: str = Field(..., min_length=10, max_length=2000)
     suggestion: str = Field(..., min_length=5, max_length=2000)
+
+    @field_validator("line")
+    @classmethod
+    def _normalize_line(cls, v: Optional[int]) -> Optional[int]:
+        if v == 0:
+            return None
+        return v
 
 
 class ReviewResult(BaseModel):
