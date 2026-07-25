@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 
 # Heuristic patterns for common secrets.
 SECRET_PATTERNS = [
-    re.compile(r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"][a-z0-9_\-]{16,}['\"]"),
-    re.compile(r"(?i)(secret[_-]?key|secretkey)\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
-    re.compile(r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
-    re.compile(r"(?i)token\s*[:=]\s*['\"][a-z0-9_\-]{20,}['\"]"),
+    re.compile(r"(?i)(api[_-]?key|apikey)\s*[:=]\s*['\"][a-z0-9_\-]{4,}['\"]"),
+    re.compile(r"(?i)(secret[_-]?key|secretkey)\s*[:=]\s*['\"][^'\"]{4,}['\"]"),
+    re.compile(r"(?i)(password|passwd|pwd)\s*[:=]\s*['\"][^'\"]{4,}['\"]"),
+    re.compile(r"(?i)token\s*[:=]\s*['\"][a-z0-9_\-]{4,}['\"]"),
     re.compile(r"(?i)aws[_-]?secret[_-]?access[_-]?key\s*[:=]\s*['\"][^'\"]+['\"]"),
 ]
 

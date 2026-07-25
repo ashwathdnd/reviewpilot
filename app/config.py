@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     database_url: str = Field("sqlite:///./reviewpilot.db", description="SQLAlchemy database URL.")
 
     confidence_threshold: float = Field(0.7, ge=0.0, le=1.0, description="Minimum confidence for a finding.")
-    max_findings: int = Field(5, ge=1, le=20, description="Maximum findings published in one review.")
-    max_findings_per_file: int = Field(2, ge=1, le=10, description="Maximum findings per file.")
+    max_findings: int = Field(10, ge=1, le=20, description="Maximum findings published in one review.")
+    max_findings_per_file: int = Field(5, ge=1, le=10, description="Maximum findings per file.")
     max_files: int = Field(20, ge=1, le=100, description="Maximum changed files to review.")
     max_chars: int = Field(100_000, ge=1_000, le=500_000, description="Maximum characters of patch text to send to the LLM.")
 
