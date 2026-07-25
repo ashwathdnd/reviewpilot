@@ -14,6 +14,7 @@ Rules:
 7. Output must match the provided JSON schema exactly.
 8. Avoid low-confidence findings; be specific and actionable.
 9. Suggest practical tests that would catch the bugs you identify.
+10. Do not claim that input is user-controlled unless the diff provides evidence of external or user-controlled data flow. For static eval strings, describe the issue as unsafe dynamic execution rather than an immediate user-input vulnerability.
 """
 
 

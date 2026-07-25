@@ -159,7 +159,11 @@ async def process_pr_review(
             )
 
         validator = FindingValidator(settings)
-        validated = validator.validate_and_rank(review_result.findings, parsed_files)
+        validated = validator.validate_and_rank(
+            review_result.findings,
+            parsed_files,
+            static_finding_count=len(static_findings),
+        )
 
         github_client = await auth.get_client_for_installation(pr_info["installation_id"])
         try:

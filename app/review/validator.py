@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from app.config import Settings
 from app.github.diff_parser import ParsedFile
@@ -20,6 +21,16 @@ class ValidatedFinding(Finding):
     """A finding that has passed validation against the PR diff."""
 
 
+# Maps title keywords to a normalized finding type key.
+# Two findings sharing the same normalized type on the same file/line/category
+# are considered duplicates.
+_FINDING_TYPE_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"secret|api[_-]?\s*key|apikey|password|token|credential", re.I), "hardcoded_secret"),
+    (re.compile(r"\beval\b|code.execution|dynamic.execution", re.I), "unsafe_eval"),
+    (re.compile(r"\bdebug\b|print.statement|breakpoint|console\.log", re.I), "debug_statement"),
+]
+
+
 class FindingValidator:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -28,10 +39,10 @@ class FindingValidator:
         self,
         findings: list[Finding],
         parsed_files: list[ParsedFile],
+        static_finding_count: int = 0,
     ) -> list[ValidatedFinding]:
         changed_files = {pf.filename: pf for pf in parsed_files}
 
-        # Filter by confidence and changed file presence.
         accepted: list[Finding] = []
         for finding in findings:
             if finding.confidence < self.settings.confidence_threshold:
@@ -41,16 +52,13 @@ class FindingValidator:
                 continue
             accepted.append(finding)
 
-        # Validate line numbers against the right side of the diff.
         accepted = self._validate_lines(accepted, changed_files)
 
-        # Deduplicate.
-        accepted = self._deduplicate(accepted)
+        # Deduplicate before limits.
+        accepted = self._deduplicate(accepted, static_finding_count)
 
-        # Rank: severity first, then confidence.
         accepted.sort(key=lambda f: (SEVERITY_ORDER[f.severity], -f.confidence))
 
-        # Apply per-file cap then global cap.
         accepted = self._apply_limits(accepted)
 
         return [ValidatedFinding(**f.model_dump()) for f in accepted]
@@ -64,11 +72,9 @@ class FindingValidator:
             if finding.line is None:
                 validated.append(finding)
                 continue
-
             if finding.line in parsed.line_map:
                 validated.append(finding)
             else:
-                # Drop invalid line number rather than guessing.
                 logger.debug(
                     "Dropping finding %s on %s line %d: line not in right-side diff",
                     finding.title,
@@ -77,16 +83,71 @@ class FindingValidator:
                 )
         return validated
 
-    def _deduplicate(self, findings: list[Finding]) -> list[Finding]:
-        seen: set[tuple[str, str | None, str, str]] = set()
-        deduped: list[Finding] = []
-        for finding in findings:
-            key = (finding.file_path, finding.line, finding.category.value, finding.title)
-            if key in seen:
+    # ------------------------------------------------------------------
+    # Deduplication
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_finding_type(title: str) -> str:
+        """Map a finding title to a normalized type key."""
+        for pattern, norm_type in _FINDING_TYPE_PATTERNS:
+            if pattern.search(title):
+                return norm_type
+        return title.lower().strip()
+
+    def _deduplicate(
+        self,
+        findings: list[Finding],
+        static_finding_count: int = 0,
+    ) -> list[Finding]:
+        """Group findings by (file, line, category) then merge duplicates by
+        normalized type.  Static findings (the first *static_finding_count*
+        items) take precedence over LLM findings."""
+        groups: dict[tuple[str, int | None, str], list[tuple[int, Finding]]] = {}
+        for idx, finding in enumerate(findings):
+            key = (finding.file_path, finding.line, finding.category.value)
+            groups.setdefault(key, []).append((idx, finding))
+
+        result: list[Finding] = []
+        for key, group in groups.items():
+            if len(group) == 1:
+                result.append(group[0][1])
                 continue
-            seen.add(key)
-            deduped.append(finding)
-        return deduped
+
+            static_group: list[Finding] = []
+            llm_group: list[Finding] = []
+            for orig_idx, f in group:
+                (static_group if orig_idx < static_finding_count else llm_group).append(f)
+
+            merged: dict[str, Finding] = {}
+            for f in static_group:
+                norm = self._normalize_finding_type(f.title)
+                merged[norm] = f
+
+            for f in llm_group:
+                norm = self._normalize_finding_type(f.title)
+                if norm in merged:
+                    merged[norm] = self._merge_llm_into_static(merged[norm], f)
+                else:
+                    merged[norm] = f
+
+            result.extend(merged.values())
+
+        return result
+
+    @staticmethod
+    def _merge_llm_into_static(static: Finding, llm: Finding) -> Finding:
+        """Merge suggestion / failure_scenario from LLM into a static finding
+        when the LLM version is more detailed."""
+        if llm.suggestion and len(llm.suggestion.strip()) > len(static.suggestion.strip()):
+            static.suggestion = llm.suggestion
+        if llm.failure_scenario and len(llm.failure_scenario.strip()) > len(static.failure_scenario.strip()):
+            static.failure_scenario = llm.failure_scenario
+        return static
+
+    # ------------------------------------------------------------------
+    # Limits
+    # ------------------------------------------------------------------
 
     def _apply_limits(self, findings: list[Finding]) -> list[Finding]:
         per_file_counts: dict[str, int] = {}
