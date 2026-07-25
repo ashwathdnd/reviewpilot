@@ -64,8 +64,41 @@ class ReviewResult(BaseModel):
     @field_validator("findings")
     @classmethod
     def _limit_candidate_findings(cls, findings: list[Finding]) -> list[Finding]:
-        # The model is instructed to return at most eight; enforce here as a guard.
         return findings[:8]
+
+
+# ------------------------------------------------------------------
+# Critic models
+# ------------------------------------------------------------------
+
+class CriticAction(str, Enum):
+    keep = "keep"
+    revise = "revise"
+    merge = "merge"
+    remove = "remove"
+
+
+class CriticFindingDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    finding_index: int = Field(..., ge=0)
+    action: CriticAction
+    merge_into_index: Optional[int] = Field(None, ge=0)
+    strong_reason: bool = Field(default=False, description="True when the critic is confident the action is needed.")
+    reason: str = Field(..., min_length=5, max_length=500)
+    revised_title: Optional[str] = Field(None, min_length=3, max_length=200)
+    revised_severity: Optional[Severity] = None
+    revised_explanation: Optional[str] = Field(None, min_length=10, max_length=2000)
+    revised_failure_scenario: Optional[str] = Field(None, min_length=10, max_length=2000)
+    revised_suggestion: Optional[str] = Field(None, min_length=5, max_length=2000)
+
+
+class CriticResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decisions: list[CriticFindingDecision] = Field(default_factory=list)
+    missing_findings: list[Finding] = Field(default_factory=list)
+    reviewer_summary_update: Optional[str] = Field(None, max_length=2000)
 
 
 # SQLAlchemy persistence models
@@ -84,6 +117,7 @@ class ReviewRun(Base):  # type: ignore[misc]
     risk_level = Column(String(20), nullable=True)
     suggested_tests = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
+    critic_decisions = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
 
