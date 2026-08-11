@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     critic_enabled: bool = Field(True, description="Enable the critic stage in the review pipeline.")
     critic_timeout: int = Field(60, ge=5, le=300, description="Timeout in seconds for critic LLM requests.")
+    rate_limit_enabled: bool = Field(True, description="Enable rate limiting on the webhook endpoint.")
     port: int = Field(8000, ge=1, le=65535, description="Port for the Uvicorn server.")
     log_level: str = Field("info", description="Uvicorn/Python log level.")
 
@@ -106,6 +107,7 @@ jG2c2kY6B0t7c4c5X6iQ8n8m7c5n4k3j2h1g0f
         "github_webhook_secret": "test-secret",
         "openai_api_key": "test-openai-key",
         "database_url": "sqlite:///:memory:",
+        "rate_limit_enabled": False,
     }
     defaults.update(overrides)
     return Settings(**defaults)
