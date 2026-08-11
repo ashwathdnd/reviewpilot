@@ -61,9 +61,10 @@ def create_app() -> FastAPI:
     # --- Error handlers ---
     register_error_handlers(app)
 
-    from app.api import health, webhooks
+    from app.api import health, waitlist, webhooks
 
     app.include_router(health.router, tags=["health"])
+    app.include_router(waitlist.router, tags=["waitlist"])
     app.include_router(webhooks.router, tags=["webhooks"])
 
     return app

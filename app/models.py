@@ -154,3 +154,28 @@ class WebhookDelivery(Base):  # type: ignore[misc]
     pr_number = Column(Integer, nullable=True)
     received_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     processed = Column(Integer, default=0)
+
+
+# ------------------------------------------------------------------
+# Waitlist
+# ------------------------------------------------------------------
+
+class WaitlistEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(..., min_length=5, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, v: str) -> str:
+        import re
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Invalid email address")
+        return v.lower().strip()
+
+
+class WaitlistRecord(Base):  # type: ignore[misc]
+    __tablename__ = "waitlist"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
