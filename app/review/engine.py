@@ -12,6 +12,8 @@ from app.models import Finding, ReviewResult
 from app.review.prompts import (
     REVIEW_SYSTEM_PROMPT,
     REVIEW_USER_PROMPT_TEMPLATE,
+    FEW_SHOT_EXAMPLES,
+    build_language_context,
     format_static_findings,
 )
 
@@ -39,14 +41,12 @@ def _make_strict_schema(schema: dict) -> dict:
         if props:
             s["required"] = list(props.keys())
             for key, prop in props.items():
-                # Resolve $ref
                 if "$ref" in prop:
                     resolved = _resolve_ref(prop["$ref"])
                     prop.clear()
                     prop.update(resolved)
 
                 if "anyOf" in prop:
-                    # Resolve any $ref inside anyOf items before extracting types.
                     resolved_anyOf = []
                     for opt in prop["anyOf"]:
                         if "$ref" in opt:
@@ -61,8 +61,6 @@ def _make_strict_schema(schema: dict) -> dict:
                             has_null = True
                         elif t:
                             types.append(t)
-                        # Enums have "enum" but no explicit type; infer type from first
-                        # value if one exists.
                         if not t and "enum" in opt:
                             first = opt["enum"][0]
                             if isinstance(first, str):
@@ -90,7 +88,6 @@ def _make_strict_schema(schema: dict) -> dict:
                     prop.pop("anyOf", None)
                     prop.pop("default", None)
 
-                # Recurse into nested objects
                 if prop.get("type") == "object" and "properties" in prop:
                     _fix(prop)
                 if "items" in prop and isinstance(prop["items"], dict):
@@ -105,6 +102,20 @@ def _make_strict_schema(schema: dict) -> dict:
         _fix(defn)
     schema.pop("$defs", None)
     return schema
+
+
+def _pick_temperature(diff_chars: int, model: str) -> float:
+    """Choose a temperature based on diff size and model.
+
+    Larger diffs get slightly higher temperature to encourage broader
+    coverage. Smaller, focused diffs stay colder for precision.
+    """
+    if diff_chars < 10_000:
+        return 0.15
+    elif diff_chars < 50_000:
+        return 0.2
+    else:
+        return 0.28
 
 
 class ReviewEngine:
@@ -128,7 +139,19 @@ class ReviewEngine:
         head_branch: str,
         diff_text: str,
         static_findings: list[Finding],
+        parsed_files: list[Any] | None = None,
     ) -> ReviewResult:
+        truncated_diff = diff_text[: self.settings.max_chars]
+        languages = "unknown"
+        if parsed_files:
+            from app.review.prompts import _detect_languages
+            detected = _detect_languages(parsed_files)
+            languages = ", ".join(sorted(detected)) if detected else "unknown"
+
+        language_context = ""
+        if parsed_files:
+            language_context = build_language_context(parsed_files)
+
         user_prompt = REVIEW_USER_PROMPT_TEMPLATE.format(
             repository=repository,
             pr_title=pr_title,
@@ -136,19 +159,27 @@ class ReviewEngine:
             author=author,
             base_branch=base_branch,
             head_branch=head_branch,
+            languages=languages,
             max_chars=self.settings.max_chars,
-            diff_text=diff_text[: self.settings.max_chars],
+            diff_text=truncated_diff,
             static_findings=format_static_findings(static_findings),
+            few_shot_examples=FEW_SHOT_EXAMPLES if static_findings or len(truncated_diff) > 2000 else "",
+        )
+
+        system_prompt = REVIEW_SYSTEM_PROMPT.format(
+            language_context=language_context,
         )
 
         schema = ReviewResult.model_json_schema()
         schema = _make_strict_schema(schema)
 
+        temperature = _pick_temperature(len(truncated_diff), self.settings.openai_model)
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.settings.openai_model,
                 messages=[
-                    {"role": "system", "content": REVIEW_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
                 response_format={
@@ -159,7 +190,7 @@ class ReviewEngine:
                         "strict": True,
                     },
                 },
-                temperature=0.2,
+                temperature=temperature,
                 max_tokens=4000,
             )
         except Exception as exc:
@@ -182,8 +213,6 @@ class ReviewEngine:
             logger.error("OpenAI response failed schema validation: %s", exc)
             raise LLMError(f"LLM response did not match ReviewResult schema: {exc}") from exc
 
-        # Merge static findings with LLM findings. Static checks run first, then
-        # validator deduplicates and ranks the combined set.
         combined = list(static_findings) + list(result.findings)
         result.findings = combined
         return result
