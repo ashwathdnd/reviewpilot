@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
+    cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+
     app = FastAPI(
         title="ReviewPilot",
         description="AI-powered GitHub pull request reviewer.",
@@ -42,12 +45,7 @@ def create_app() -> FastAPI:
     # --- CORS: allow the frontend to call the backend ---
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "https://reviewpilot.dev",
-            "https://www.reviewpilot.dev",
-        ],
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
