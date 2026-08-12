@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy.exc import IntegrityError
+from fastapi import APIRouter, HTTPException, Query
 
 from app.config import get_settings
 from app.database import get_database
@@ -17,7 +16,7 @@ router = APIRouter()
 @router.post("/waitlist")
 async def join_waitlist(entry: WaitlistEntry):
     """Add an email to the waitlist. Idempotent — duplicate emails return 200."""
-    db = get_database(get_settings())
+    db = get_database()
     record = WaitlistRecord(email=entry.email)
 
     with db.session() as session:
@@ -25,11 +24,7 @@ async def join_waitlist(entry: WaitlistEntry):
         if existing:
             return {"status": "ok", "detail": "Email already on waitlist."}
 
-        try:
-            session.add(record)
-            session.flush()
-        except IntegrityError:
-            return {"status": "ok", "detail": "Email already on waitlist."}
+        session.add(record)
 
     logger.info("Waitlist signup: %s", entry.email)
     return {"status": "ok", "detail": "Added to waitlist."}
@@ -42,7 +37,7 @@ async def list_waitlist(token: str = Query(...)):
     if not settings.admin_token or token != settings.admin_token:
         raise HTTPException(status_code=403, detail="Invalid token")
 
-    db = get_database(settings)
+    db = get_database()
     with db.session() as session:
         entries = session.query(WaitlistRecord).order_by(WaitlistRecord.created_at.desc()).all()
 
