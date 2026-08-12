@@ -16,18 +16,23 @@ router = APIRouter()
 @router.post("/waitlist")
 async def join_waitlist(entry: WaitlistEntry):
     """Add an email to the waitlist. Idempotent — duplicate emails return 200."""
-    db = get_database()
-    record = WaitlistRecord(email=entry.email)
+    try:
+        db = get_database()
+        existing = None
+        with db.session() as session:
+            existing = session.query(WaitlistRecord).filter_by(email=entry.email).first()
+            if not existing:
+                session.add(WaitlistRecord(email=entry.email))
 
-    with db.session() as session:
-        existing = session.query(WaitlistRecord).filter_by(email=entry.email).first()
         if existing:
+            logger.info("Waitlist duplicate: %s", entry.email)
             return {"status": "ok", "detail": "Email already on waitlist."}
 
-        session.add(record)
-
-    logger.info("Waitlist signup: %s", entry.email)
-    return {"status": "ok", "detail": "Added to waitlist."}
+        logger.info("Waitlist signup: %s", entry.email)
+        return {"status": "ok", "detail": "Added to waitlist."}
+    except Exception as exc:
+        logger.exception("Waitlist POST failed: %s", exc)
+        raise
 
 
 @router.get("/waitlist")
