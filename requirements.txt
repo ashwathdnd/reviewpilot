@@ -22,6 +22,7 @@ pycparser==2.23
 pydantic==2.13.4
 pydantic-settings==2.11.0
 pydantic_core==2.46.4
+psycopg2-binary
 Pygments==2.20.0
 PyJWT==2.13.0
 pytest==8.4.2
