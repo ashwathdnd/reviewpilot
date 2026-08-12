@@ -4,9 +4,16 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
+from app.middleware import (
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    RequestLoggingMiddleware,
+    register_error_handlers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +26,15 @@ async def lifespan(app: FastAPI):
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
     init_db(settings)
-    logger.info("ReviewPilot started")
+    logger.info("ReviewPilot started on port %d", settings.port)
     yield
     logger.info("ReviewPilot shutting down")
 
 
 def create_app() -> FastAPI:
+    settings = get_settings()
+    cors_origins = [origin.strip() for origin in settings.cors_origins.split(",")]
+
     app = FastAPI(
         title="ReviewPilot",
         description="AI-powered GitHub pull request reviewer.",
@@ -32,9 +42,27 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    from app.api import health, webhooks
+    # --- CORS: allow the frontend to call the backend ---
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+    )
+
+    # --- Middleware stack ---
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+    app.add_middleware(RequestLoggingMiddleware)
+
+    # --- Error handlers ---
+    register_error_handlers(app)
+
+    from app.api import health, waitlist, webhooks
 
     app.include_router(health.router, tags=["health"])
+    app.include_router(waitlist.router, tags=["waitlist"])
     app.include_router(webhooks.router, tags=["webhooks"])
 
     return app

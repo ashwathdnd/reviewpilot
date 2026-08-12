@@ -1,7 +1,6 @@
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1
-backports.asyncio.runner==1.2.0
 certifi==2026.7.22
 cffi==2.0.0
 click==8.1.8
@@ -23,6 +22,7 @@ pycparser==2.23
 pydantic==2.13.4
 pydantic-settings==2.11.0
 pydantic_core==2.46.4
+psycopg2-binary
 Pygments==2.20.0
 PyJWT==2.13.0
 pytest==8.4.2

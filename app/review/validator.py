@@ -26,8 +26,20 @@ class ValidatedFinding(Finding):
 # are considered duplicates.
 _FINDING_TYPE_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"secret|api[_-]?\s*key|apikey|password|token|credential", re.I), "hardcoded_secret"),
-    (re.compile(r"\beval\b|code.execution|dynamic.execution", re.I), "unsafe_eval"),
-    (re.compile(r"\bdebug\b|print.statement|breakpoint|console\.log", re.I), "debug_statement"),
+    (re.compile(r"\beval\b|code.execution|dynamic.execution|injection", re.I), "unsafe_eval"),
+    (re.compile(r"\bdebug\b|print.statement|breakpoint|console\.log|logger\.debug", re.I), "debug_statement"),
+    (re.compile(r"(?i)sql.injection|query.*inject|string.interpolat.*query|parameterize.*query", re.I), "sql_injection"),
+    (re.compile(r"(?i)xss|cross.site|innerhtml|dangerouslyset|document\.write|script.inject", re.I), "xss_vector"),
+    (re.compile(r"resource.leak|unclosed|file.handle|leak|too.many.open", re.I), "resource_leak"),
+    (re.compile(r"(?i)race.condition|unawaited|missing.await|without.await|concurrent|deadlock", re.I), "race_condition"),
+    (re.compile(r"(?i)log.injection|log\s+forg|format.string.*log", re.I), "log_injection"),
+    (re.compile(r"(?i)hardcod.*(?:url|port|config|ip|path|address|endpoint)", re.I), "hardcoded_config"),
+    (re.compile(r"(?i)null.pointer|nil.pointer|undefined|not.null.checked|missing.null|optional.unwrap", re.I), "null_safety"),
+    (re.compile(r"(?i)error.*swallowed|except.*pass|except.*continue|empty.catch|swallowed.exception", re.I), "swallowed_error"),
+    (re.compile(r"(?i)todo|fixme|unresolved|incomplete|placeholder|stub", re.I), "todo_marker"),
+    (re.compile(r"(?i)missing.test|no.test|without.test|untested|not.tested", re.I), "missing_test"),
+    (re.compile(r"(?i)deprecat.*(?:use|call|function|api)|use.*deprecat|obsolete", re.I), "deprecated_usage"),
+    (re.compile(r"(?i)type.*(?:narrow|cast|coerce|assert).*unsafe|any\s+type|as\s+unknown|force.cast", re.I), "unsafe_type"),
 ]
 
 

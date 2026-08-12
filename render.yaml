@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: reviewpilot-backend
+    runtime: docker
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_PRIVATE_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: DATABASE_URL
+        value: sqlite:///./reviewpilot.db
+      - key: CONFIDENCE_THRESHOLD
+        value: "0.7"
+      - key: MAX_FINDINGS
+        value: "10"
+      - key: MAX_FINDINGS_PER_FILE
+        value: "5"
+      - key: MAX_FILES
+        value: "20"
+      - key: MAX_CHARS
+        value: "100000"
+      - key: CRITIC_ENABLED
+        value: "true"
+      - key: CRITIC_TIMEOUT
+        value: "60"
+      - key: PORT
+        value: "8000"
+      - key: CORS_ORIGINS
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: LOG_LEVEL
+        value: info
+      - key: PYTHONUNBUFFERED
+        value: "1"

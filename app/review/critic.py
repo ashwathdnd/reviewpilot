@@ -49,7 +49,21 @@ Candidate findings:
 
 For each finding, decide: keep, revise, merge, or remove.  If you see an
 obvious issue that is missing from the candidate set, add it in
-missing_findings."""
+missing_findings.
+
+Example of a good revise decision:
+- finding_index: 2, action: revise
+- The title "Fix this" is too vague. Revised: "Add null check before accessing user.email".
+- The severity is too low for a potential crash. Revised: severity → high.
+
+Example of a good remove decision:
+- finding_index: 4, action: remove
+- Finding is about code style (trailing whitespace) which is better handled by a linter.
+- strong_reason: false (not blocking a static finding).
+
+Example of a good merge decision:
+- finding_index: 3, action: merge, merge_into_index: 1
+- Finding 3 is semantically identical to finding 1. Merging to keep the better-worded one."""
 
 
 def _format_candidate(i: int, f: Finding) -> str:
@@ -96,6 +110,15 @@ class CriticEngine:
 
         schema = _make_strict_schema(schema)
 
+        # Scale temperature: more candidates = slightly more variance needed
+        candidate_count = len(candidate_findings)
+        if candidate_count <= 3:
+            temperature = 0.08
+        elif candidate_count <= 6:
+            temperature = 0.1
+        else:
+            temperature = 0.15
+
         try:
             response = await self.client.chat.completions.create(
                 model=self.settings.openai_model,
@@ -111,7 +134,7 @@ class CriticEngine:
                         "strict": True,
                     },
                 },
-                temperature=0.1,
+                temperature=temperature,
                 max_tokens=4000,
             )
         except Exception as exc:

@@ -47,6 +47,7 @@ async def run_review(
             head_branch=pr_info["head_branch"],
             diff_text=diff_text,
             static_findings=static_findings,
+            parsed_files=parsed_files,
         )
 
 
