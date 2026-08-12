@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         "http://localhost:3000,http://127.0.0.1:3000",
         description="Comma-separated list of allowed CORS origins.",
     )
+    admin_token: str = Field(
+        default="",
+        description="Token for authenticated admin endpoints.",
+    )
     port: int = Field(8000, ge=1, le=65535, description="Port for the Uvicorn server.")
     log_level: str = Field("info", description="Uvicorn/Python log level.")
 
